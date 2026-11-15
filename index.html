@@ -9,8 +9,8 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 
   <style>
     :root {
@@ -45,11 +45,15 @@
     .role-btn { padding: 5px 8px; border: none; border-radius: 6px; background: transparent; color: var(--text-secondary); font-size: 11px; font-weight: 500; cursor: pointer; }
     .role-btn.active { background: var(--text-primary); color: var(--brand-text); font-weight: 600; }
 
-    #map { width: 100%; height: 40%; background: #141417; z-index: 1; position: relative; }
-    .uber-dark-tiles { filter: invert(100%) hue-rotate(180deg) brightness(92%) contrast(92%) saturate(85%); }
-    .leaflet-control-attribution, .leaflet-control-zoom { display: none !important; }
+    /* Uber Vector Map Container */
+    #map { width: 100%; height: 42%; background: #0d0d10; z-index: 1; position: relative; }
+    .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left { display: none !important; }
 
-    .map-pill { position: absolute; bottom: 12px; left: 12px; z-index: 500; background: rgba(18, 18, 21, 0.92); backdrop-filter: blur(8px); border: 1px solid var(--border-strong); padding: 6px 12px; border-radius: 99px; font-size: 11.5px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+    .uber-pin-pickup { width: 16px; height: 16px; border-radius: 50%; background: #22c55e; border: 3px solid #ffffff; box-shadow: 0 0 0 6px rgba(34, 197, 94, 0.25); }
+    .uber-pin-drop { width: 16px; height: 16px; border-radius: 3px; background: #ffffff; border: 4px solid #09090b; box-shadow: 0 2px 8px rgba(0,0,0,0.8); }
+    .uber-pin-driver { background: #18181b; color: #fafafa; border: 1.5px solid #e11d48; font-size: 10px; font-weight: 700; padding: 3px 6px; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.7); white-space: nowrap; }
+
+    .map-pill { position: absolute; bottom: 18px; left: 12px; z-index: 20; background: rgba(18, 18, 21, 0.92); backdrop-filter: blur(8px); border: 1px solid var(--border-strong); padding: 6px 12px; border-radius: 99px; font-size: 11.5px; font-weight: 600; display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 16px rgba(0,0,0,0.6); }
     .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
 
     .drawer { flex: 1; background: var(--bg-surface); border-top: 1px solid var(--border); border-radius: 18px 18px 0 0; margin-top: -12px; z-index: 10; padding: 14px 16px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 13px; position: relative; }
@@ -59,7 +63,7 @@
     .address-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; }
     .address-divider { height: 1px; background: var(--border); margin-left: 20px; }
     .marker-circle { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; flex-shrink: 0; }
-    .marker-square { width: 8px; height: 8px; background: #f43f5e; flex-shrink: 0; }
+    .marker-square { width: 8px; height: 8px; background: #ffffff; flex-shrink: 0; }
     .loc-input { width: 100%; background: transparent; border: none; color: var(--text-primary); font-size: 13px; font-weight: 500; outline: none; }
     .clear-btn { background: none; border: none; color: var(--text-muted); font-size: 15px; cursor: pointer; padding: 0 4px; }
 
@@ -183,28 +187,42 @@
       </div>
     </div>
 
-    <!-- 2. DRIVER PARTNER APP -->
+    <!-- 2. DRIVER PARTNER APP (LIVE GPS + OTP + WALLET) -->
     <div id="tab-driver" class="screen-body hidden">
       <div class="kpi-row">
         <div class="kpi-card">
           <div class="kpi-title">Partner Account</div>
           <div class="kpi-number" style="font-size:15px;" id="drv-name-display">Priya Sharma</div>
+          <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;" id="drv-kyc-display">Verified • WB06T4412</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-title">KYC & Vehicle</div>
-          <div class="kpi-number" style="font-size:14px;" id="drv-kyc-display">Verified • WB06T4412</div>
+          <div class="kpi-title">Earnings Wallet</div>
+          <div class="kpi-number" style="color:#4ade80;" id="drv-wallet-display">₹0.00</div>
+          <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">85% Net Payout</div>
         </div>
+      </div>
+
+      <!-- Active Trip Dispatch & PIN Verification Box -->
+      <div id="driver-trip-box" class="trip-card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <span style="font-size:12px; font-weight:600; color:var(--text-secondary);">Active Dispatch</span>
+          <button onclick="loadDriverDashboard()" style="background:none; border:none; color:#38bdf8; font-size:11px; font-weight:600; cursor:pointer;">Refresh</button>
+        </div>
+        <div id="driver-trip-content" style="font-size:12.5px; color:var(--text-secondary);">Checking for assigned rides...</div>
       </div>
 
       <div class="card-panel" style="display:flex; justify-content:space-between; align-items:center;">
         <div>
-          <div style="font-size:14px; font-weight:600;">Online Status (Live DB)</div>
-          <div style="font-size:12px; color:var(--text-secondary);" id="driver-status-sub">Accepting trip requests</div>
+          <div style="font-size:14px; font-weight:600;">Online Status & Live GPS</div>
+          <div style="font-size:12px; color:var(--text-secondary);" id="driver-status-sub">Syncing Kolkata GPS</div>
         </div>
-        <label class="toggle">
-          <input type="checkbox" id="drv-online-toggle" checked onchange="toggleDriverOnline(this)">
-          <span class="toggle-track"></span>
-        </label>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <button onclick="syncRealPhoneGPS()" style="padding:6px 10px; border-radius:7px; border:1px solid var(--border-strong); background:var(--bg-elevated); color:var(--text-primary); font-size:11px; cursor:pointer;">Update GPS</button>
+          <label class="toggle">
+            <input type="checkbox" id="drv-online-toggle" checked onchange="toggleDriverOnline(this)">
+            <span class="toggle-track"></span>
+          </label>
+        </div>
       </div>
 
       <div>
@@ -235,7 +253,7 @@
     <div id="auth-modal" class="modal-overlay hidden">
       <div class="modal-sheet">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
-          <span style="font-size:16px; font-weight:700;" id="auth-modal-title">Zeno Account & KYC</span>
+          <span style="font-size:16px; font-weight:700;">Zeno Account & KYC</span>
           <button onclick="closeAuthModal()" style="background:none; border:none; color:var(--text-secondary); font-size:20px; cursor:pointer;">×</button>
         </div>
 
@@ -282,9 +300,42 @@
     let activeDriverId = '11111111-1111-1111-1111-111111111111';
     let authMode = 'login';
     let regGender = 'Female';
+    let mapReady = false;
 
-    const map = L.map('map', { zoomControl: false }).setView([22.5726, 88.3939], 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, className: 'uber-dark-tiles' }).addTo(map);
+    // UBER-STYLE VECTOR DARK MAP (MapLibre GL + OpenFreeMap Dark Matter)
+    const map = new maplibregl.Map({
+      container: 'map',
+      style: 'https://tiles.openfreemap.org/styles/dark',
+      center: [88.3939, 22.5643],
+      zoom: 12.2,
+      pitch: 25,
+      attributionControl: false
+    });
+
+    map.on('load', () => {
+      mapReady = true;
+      map.addSource('route', {
+        type: 'geojson',
+        data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } }
+      });
+      // Outer glow casing
+      map.addLayer({
+        id: 'route-casing',
+        type: 'line',
+        source: 'route',
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-color': '#0284c7', 'line-width': 8, 'line-opacity': 0.35 }
+      });
+      // Core crisp Uber-style route line
+      map.addLayer({
+        id: 'route-line',
+        type: 'line',
+        source: 'route',
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-color': '#38bdf8', 'line-width': 4 }
+      });
+      fetchRealRoadRoute();
+    });
 
     let state = {
       pickup: { name: 'Salt Lake Sector V, Kolkata', lat: 22.5735, lng: 88.4331 },
@@ -313,131 +364,46 @@
       outstation: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>`
     };
 
-    function applyUserSession() {
-      if (currentUser) {
-        document.getElementById('auth-status-btn').innerText = `${currentUser.full_name.split(' ')[0]} (${currentUser.role})`;
-        setSelfGender(currentUser.gender);
-        if (currentUser.role === 'driver') {
-          activeDriverId = currentUser.id;
-          document.getElementById('drv-name-display').innerText = currentUser.full_name;
-        }
-      }
+    let mapMarkers = [], searchTimeout = null;
+
+    function createPinEl(cls, text = '') {
+      const el = document.createElement('div');
+      el.className = cls;
+      if (text) el.innerText = text;
+      return el;
     }
 
-    function openAuthModal(mode = 'login') {
-      switchAuthMode(mode);
-      document.getElementById('auth-modal').classList.remove('hidden');
-    }
-    function closeAuthModal() { document.getElementById('auth-modal').classList.add('hidden'); }
-
-    function switchAuthMode(mode) {
-      authMode = mode;
-      document.getElementById('tab-auth-login').className = mode === 'login' ? 'choice-btn selected' : 'choice-btn';
-      document.getElementById('tab-auth-rider').className = mode === 'register_rider' ? 'choice-btn selected' : 'choice-btn';
-      document.getElementById('tab-auth-driver').className = mode === 'register_driver' ? 'choice-btn selected' : 'choice-btn';
-      document.getElementById('auth-common-reg').classList.toggle('hidden', mode === 'login');
-      document.getElementById('auth-driver-fields').classList.toggle('hidden', mode !== 'register_driver');
-      document.getElementById('auth-submit-btn').innerText = mode === 'login' ? 'Login' : (mode === 'register_driver' ? 'Submit KYC & Register' : 'Create Rider Account');
-    }
-
-    function setRegGender(g) {
-      regGender = g;
-      document.getElementById('reg-g-f').className = g === 'Female' ? 'choice-btn selected-female' : 'choice-btn';
-      document.getElementById('reg-g-m').className = g === 'Male' ? 'choice-btn selected-male' : 'choice-btn';
-    }
-
-    async function submitAuth() {
-      const phone = document.getElementById('auth-phone').value.trim();
-      const password = document.getElementById('auth-pass').value.trim();
-      if (!phone || !password) return alert('Enter phone & password');
-
+    async function fetchRealRoadRoute() {
+      const { pickup, dropoff } = state;
       try {
-        if (authMode === 'login') {
-          const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone, password })
-          });
-          const data = await res.json();
-          if (!res.ok) return alert(data.error);
-          currentUser = data.user;
-          localStorage.setItem('zeno_user', JSON.stringify(currentUser));
-          if (data.driverInfo && data.driverInfo.vehicle) {
-            document.getElementById('drv-kyc-display').innerText = `${data.driverInfo.profile.kyc_state.toUpperCase()} • ${data.driverInfo.vehicle.registration_number}`;
-          }
-          applyUserSession();
-          closeAuthModal();
-          alert(`Welcome back, ${currentUser.full_name}!`);
-        } else {
-          const payload = {
-            full_name: document.getElementById('reg-name').value.trim(),
-            phone,
-            password,
-            gender: regGender,
-            role: authMode === 'register_driver' ? 'driver' : 'rider',
-            service_type: document.getElementById('reg-service').value,
-            license_number: document.getElementById('reg-dl').value.trim(),
-            aadhaar_last4: document.getElementById('reg-aadhaar').value.trim(),
-            registration_number: document.getElementById('reg-plate').value.trim(),
-            model_name: document.getElementById('reg-model').value.trim(),
-            rc_number: document.getElementById('reg-rc').value.trim(),
-            permit_number: document.getElementById('reg-permit').value.trim()
-          };
-          const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-          const data = await res.json();
-          if (!res.ok) return alert(data.error);
-          currentUser = data.user;
-          localStorage.setItem('zeno_user', JSON.stringify(currentUser));
-          applyUserSession();
-          closeAuthModal();
-          alert(data.message);
-        }
-      } catch (e) {
-        alert('Connection error. Try again.');
-      }
-    }
-
-    async function loadAdminDrivers() {
-      const list = document.getElementById('admin-drivers-list');
-      list.innerHTML = '<div style="font-size:12px; color:var(--text-secondary);">Loading drivers...</div>';
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/admin/drivers`);
+        const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${pickup.lng},${pickup.lat};${dropoff.lng},${dropoff.lat}?overview=full&geometries=geojson`);
         const data = await res.json();
-        list.innerHTML = '';
-        data.drivers.forEach(d => {
-          const v = d.vehicles && d.vehicles[0] ? d.vehicles[0] : {};
-          const isVerified = d.kyc_state === 'verified';
-          const card = document.createElement('div');
-          card.className = 'card-panel';
-          card.innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <div>
-                <div style="font-size:13px; font-weight:600;">${d.users.full_name} (${d.users.gender})</div>
-                <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">DL: ${d.license_number} • ${v.model_name || ''} (${v.registration_number || ''})</div>
-                <div style="font-size:11px; color:${isVerified ? '#4ade80' : '#facc15'}; margin-top:2px;">Status: ${d.kyc_state.toUpperCase()}</div>
-              </div>
-              ${!isVerified ? `<button onclick="verifyDriver('${d.user_id}', true)" style="padding:7px 12px; border:none; border-radius:7px; background:#16a34a; color:#fff; font-size:11px; font-weight:600; cursor:pointer;">Approve</button>` : '<span style="font-size:11px; color:#4ade80;">✓ Active</span>'}
-            </div>
-          `;
-          list.appendChild(card);
-        });
+        if (data.routes && data.routes.length > 0) {
+          const route = data.routes[0];
+          state.distanceKm = Math.max(1.2, (route.distance / 1000).toFixed(1));
+          state.durationMin = Math.max(5, Math.round(route.duration / 60));
+          document.getElementById('route-metrics').innerText = `${state.distanceKm} km • ${state.durationMin} min`;
+
+          if (mapReady && map.getSource('route')) {
+            map.getSource('route').setData({ type: 'Feature', geometry: route.geometry });
+          }
+
+          mapMarkers.forEach(m => m.remove());
+          mapMarkers = [
+            new maplibregl.Marker({ element: createPinEl('uber-pin-pickup') }).setLngLat([pickup.lng, pickup.lat]).addTo(map),
+            new maplibregl.Marker({ element: createPinEl('uber-pin-drop') }).setLngLat([dropoff.lng, dropoff.lat]).addTo(map),
+            new maplibregl.Marker({ element: createPinEl('uber-pin-driver', 'Priya • Bike') }).setLngLat([88.4310, 22.5745]).addTo(map),
+            new maplibregl.Marker({ element: createPinEl('uber-pin-driver', 'Riya • Cab') }).setLngLat([88.4350, 22.5720]).addTo(map)
+          ];
+
+          const bounds = new maplibregl.LngLatBounds([pickup.lng, pickup.lat], [pickup.lng, pickup.lat]);
+          bounds.extend([dropoff.lng, dropoff.lat]);
+          map.fitBounds(bounds, { padding: 55, maxZoom: 14 });
+
+          await syncLiveEstimates();
+        }
       } catch (e) {}
     }
-
-    async function verifyDriver(driverId, approve) {
-      await fetch(`${API_BASE_URL}/api/admin/drivers/${driverId}/verify`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ approve })
-      });
-      loadAdminDrivers();
-    }
-
-    let routeLayer = null, endpointMarkers = [], searchTimeout = null;
 
     function handleSearch(field, query) {
       clearTimeout(searchTimeout);
@@ -472,29 +438,6 @@
     }
 
     function clearField(field) { const inp = document.getElementById(`${field}-input`); inp.value = ''; inp.focus(); }
-
-    async function fetchRealRoadRoute() {
-      const { pickup, dropoff } = state;
-      try {
-        const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${pickup.lng},${pickup.lat};${dropoff.lng},${dropoff.lat}?overview=full&geometries=geojson`);
-        const data = await res.json();
-        if (data.routes && data.routes.length > 0) {
-          const route = data.routes[0];
-          state.distanceKm = Math.max(1.2, (route.distance / 1000).toFixed(1));
-          state.durationMin = Math.max(5, Math.round(route.duration / 60));
-          document.getElementById('route-metrics').innerText = `${state.distanceKm} km • ${state.durationMin} min`;
-          if (routeLayer) map.removeLayer(routeLayer);
-          routeLayer = L.geoJSON(route.geometry, { style: { color: '#38bdf8', weight: 5, opacity: 0.95 } }).addTo(map);
-          endpointMarkers.forEach(m => map.removeLayer(m));
-          endpointMarkers = [
-            L.circleMarker([pickup.lat, pickup.lng], { radius: 7, color: '#ffffff', weight: 2, fillColor: '#22c55e', fillOpacity: 1 }).addTo(map),
-            L.circleMarker([dropoff.lat, dropoff.lng], { radius: 7, color: '#ffffff', weight: 2, fillColor: '#f43f5e', fillOpacity: 1 }).addTo(map)
-          ];
-          map.fitBounds(routeLayer.getBounds(), { padding: [36, 36] });
-          await syncLiveEstimates();
-        }
-      } catch (e) {}
-    }
 
     async function syncLiveEstimates() {
       try {
@@ -570,12 +513,13 @@
         const data = await res.json();
         if (!res.ok) { alert(data.error); return; }
         state.activeRideId = data.ride_id;
+        activeDriverId = data.driver.id;
         document.getElementById('book-action').classList.add('hidden');
         const card = document.getElementById('ride-active');
         card.classList.remove('hidden');
         card.innerHTML = `
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-            <span style="font-size:12px; font-weight:600; color:#4ade80;">Matched • ${data.driver.distance_away_meters}m away</span>
+            <span style="font-size:12px; font-weight:600; color:#4ade80;" id="rider-trip-status">Matched • ${data.driver.distance_away_meters}m away</span>
             <span class="pin-badge">PIN ${data.start_otp}</span>
           </div>
           <div style="font-size:15px; font-weight:600;">${data.driver.name} (${data.driver.gender}) • ${data.driver.rating} ★</div>
@@ -597,12 +541,184 @@
       alert('Emergency SOS logged in Supabase.');
     }
 
-    async function toggleDriverOnline(el) {
-      document.getElementById('driver-status-sub').innerText = el.checked ? 'Online in Supabase' : 'Offline';
-      await fetch(`${API_BASE_URL}/api/drivers/status`, {
-        method: 'PATCH',
+    // STEP 3: DRIVER LIVE DASHBOARD, OTP VERIFICATION & WALLET PAYOUT
+    async function loadDriverDashboard() {
+      const box = document.getElementById('driver-trip-content');
+      box.innerHTML = 'Syncing with Supabase...';
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/drivers/${activeDriverId}/active-ride`);
+        const data = await res.json();
+        document.getElementById('drv-wallet-display').innerText = `₹${parseFloat(data.wallet_balance || 0).toFixed(2)}`;
+
+        if (!data.activeRide) {
+          box.innerHTML = 'No active ride assigned right now. Book a ride in Rider tab to dispatch here!';
+          return;
+        }
+
+        const r = data.activeRide;
+        if (r.status === 'matched') {
+          box.innerHTML = `
+            <div style="color:#4ade80; font-weight:600; margin-bottom:4px;">New Ride Request • ₹${r.total_payable}</div>
+            <div style="color:var(--text-primary); margin-bottom:8px;">${r.pickup_address} → ${r.drop_address}</div>
+            <div style="display:flex; gap:8px;">
+              <input type="text" id="driver-otp-input" maxlength="4" placeholder="Enter 4-digit PIN" style="flex:1; padding:9px; border-radius:8px; border:1px solid var(--border-strong); background:var(--bg-surface); color:#fff; font-size:13px; text-align:center; letter-spacing:2px;" />
+              <button onclick="verifyTripOTP('${r.id}')" style="padding:9px 14px; border-radius:8px; border:none; background:#16a34a; color:#fff; font-size:12px; font-weight:600; cursor:pointer;">Verify & Start</button>
+            </div>
+          `;
+        } else if (r.status === 'in_progress') {
+          box.innerHTML = `
+            <div style="color:#38bdf8; font-weight:600; margin-bottom:4px;">Trip In Progress • ₹${r.total_payable}</div>
+            <div style="color:var(--text-primary); margin-bottom:10px;">Drop: ${r.drop_address}</div>
+            <button onclick="completeTrip('${r.id}')" class="primary-btn" style="background:#16a34a; color:#fff;">Complete Ride & Collect Payout</button>
+          `;
+        }
+      } catch (e) {
+        box.innerHTML = 'Could not load active ride.';
+      }
+    }
+
+    async function verifyTripOTP(rideId) {
+      const otp = document.getElementById('driver-otp-input').value;
+      const res = await fetch(`${API_BASE_URL}/api/rides/${rideId}/verify-otp`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ driver_id: activeDriverId, is_online: el.checked })
+        body: JSON.stringify({ otp })
+      });
+      const data = await res.json();
+      if (!res.ok) return alert(data.error);
+      alert(data.message);
+      loadDriverDashboard();
+    }
+
+    async function completeTrip(rideId) {
+      const res = await fetch(`${API_BASE_URL}/api/rides/${rideId}/complete`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) return alert(data.error);
+      alert(data.message);
+      cancelRide();
+      loadDriverDashboard();
+    }
+
+    function syncRealPhoneGPS() {
+      if (!navigator.geolocation) return alert('GPS not supported');
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        await fetch(`${API_BASE_URL}/api/drivers/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ driver_id: activeDriverId, lat: latitude, lng: longitude })
+        });
+        document.getElementById('driver-status-sub').innerText = `GPS Live: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+        alert('Real phone GPS synced to PostGIS!');
+      }, () => alert('Allow location permission in Chrome settings.'));
+    }
+
+    // AUTH & ADMIN
+    function applyUserSession() {
+      if (currentUser) {
+        document.getElementById('auth-status-btn').innerText = `${currentUser.full_name.split(' ')[0]} (${currentUser.role})`;
+        setSelfGender(currentUser.gender);
+        if (currentUser.role === 'driver') {
+          activeDriverId = currentUser.id;
+          document.getElementById('drv-name-display').innerText = currentUser.full_name;
+        }
+      }
+    }
+
+    function openAuthModal(mode = 'login') { switchAuthMode(mode); document.getElementById('auth-modal').classList.remove('hidden'); }
+    function closeAuthModal() { document.getElementById('auth-modal').classList.add('hidden'); }
+    function switchAuthMode(mode) {
+      authMode = mode;
+      document.getElementById('tab-auth-login').className = mode === 'login' ? 'choice-btn selected' : 'choice-btn';
+      document.getElementById('tab-auth-rider').className = mode === 'register_rider' ? 'choice-btn selected' : 'choice-btn';
+      document.getElementById('tab-auth-driver').className = mode === 'register_driver' ? 'choice-btn selected' : 'choice-btn';
+      document.getElementById('auth-common-reg').classList.toggle('hidden', mode === 'login');
+      document.getElementById('auth-driver-fields').classList.toggle('hidden', mode !== 'register_driver');
+      document.getElementById('auth-submit-btn').innerText = mode === 'login' ? 'Login' : (mode === 'register_driver' ? 'Submit KYC & Register' : 'Create Rider Account');
+    }
+
+    function setRegGender(g) {
+      regGender = g;
+      document.getElementById('reg-g-f').className = g === 'Female' ? 'choice-btn selected-female' : 'choice-btn';
+      document.getElementById('reg-g-m').className = g === 'Male' ? 'choice-btn selected-male' : 'choice-btn';
+    }
+
+    async function submitAuth() {
+      const phone = document.getElementById('auth-phone').value.trim();
+      const password = document.getElementById('auth-pass').value.trim();
+      if (!phone || !password) return alert('Enter phone & password');
+      if (authMode === 'login') {
+        const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone, password })
+        });
+        const data = await res.json();
+        if (!res.ok) return alert(data.error);
+        currentUser = data.user;
+        localStorage.setItem('zeno_user', JSON.stringify(currentUser));
+        applyUserSession();
+        closeAuthModal();
+        alert(`Welcome back, ${currentUser.full_name}!`);
+      } else {
+        const payload = {
+          full_name: document.getElementById('reg-name').value.trim(),
+          phone, password, gender: regGender,
+          role: authMode === 'register_driver' ? 'driver' : 'rider',
+          service_type: document.getElementById('reg-service').value,
+          license_number: document.getElementById('reg-dl').value.trim(),
+          aadhaar_last4: document.getElementById('reg-aadhaar').value.trim(),
+          registration_number: document.getElementById('reg-plate').value.trim(),
+          model_name: document.getElementById('reg-model').value.trim(),
+          rc_number: document.getElementById('reg-rc').value.trim(),
+          permit_number: document.getElementById('reg-permit').value.trim()
+        };
+        const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) return alert(data.error);
+        currentUser = data.user;
+        localStorage.setItem('zeno_user', JSON.stringify(currentUser));
+        applyUserSession();
+        closeAuthModal();
+        alert(data.message);
+      }
+    }
+
+    async function loadAdminDrivers() {
+      const list = document.getElementById('admin-drivers-list');
+      list.innerHTML = '<div style="font-size:12px; color:var(--text-secondary);">Loading drivers...</div>';
+      const res = await fetch(`${API_BASE_URL}/api/admin/drivers`);
+      const data = await res.json();
+      list.innerHTML = '';
+      data.drivers.forEach(d => {
+        const v = d.vehicles && d.vehicles[0] ? d.vehicles[0] : {};
+        const isVerified = d.kyc_state === 'verified';
+        const card = document.createElement('div');
+        card.className = 'card-panel';
+        card.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <div style="font-size:13px; font-weight:600;">${d.users.full_name} (${d.users.gender})</div>
+              <div style="font-size:11px; color:var(--text-secondary);">DL: ${d.license_number} • ${v.model_name || ''} (${v.registration_number || ''})</div>
+              <div style="font-size:11px; color:${isVerified ? '#4ade80' : '#facc15'};">Status: ${d.kyc_state.toUpperCase()}</div>
+            </div>
+            ${!isVerified ? `<button onclick="verifyDriver('${d.user_id}', true)" style="padding:7px 12px; border:none; border-radius:7px; background:#16a34a; color:#fff; font-size:11px; font-weight:600; cursor:pointer;">Approve</button>` : '<span style="font-size:11px; color:#4ade80;">✓ Active</span>'}
+          </div>
+        `;
+        list.appendChild(card);
+      });
+    }
+
+    async function verifyDriver(driverId, approve) {
+      await fetch(`${API_BASE_URL}/api/admin/drivers/${driverId}/verify`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ approve })
+      });
+      loadAdminDrivers();
+    }
+
+    async function toggleDriverOnline(el) {
+      await fetch(`${API_BASE_URL}/api/drivers/status`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ driver_id: activeDriverId, is_online: el.checked })
       });
     }
 
@@ -610,9 +726,7 @@
       document.getElementById('drv-pref-f').className = p === 'Female' ? 'choice-btn selected-female' : 'choice-btn';
       document.getElementById('drv-pref-any').className = p === 'Any' ? 'choice-btn selected' : 'choice-btn';
       await fetch(`${API_BASE_URL}/api/drivers/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ driver_id: activeDriverId, rider_gender_preference: p })
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ driver_id: activeDriverId, rider_gender_preference: p })
       });
     }
 
@@ -637,9 +751,7 @@
       services[i].is_enabled = enabled;
       renderServices();
       await fetch(`${API_BASE_URL}/api/admin/modules/${services[i].code}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_enabled: enabled })
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_enabled: enabled })
       });
     }
 
@@ -647,14 +759,14 @@
       document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       ['rider', 'driver', 'admin'].forEach(t => document.getElementById('tab-' + t).classList.toggle('hidden', t !== tab));
-      if (tab === 'rider') setTimeout(() => map.invalidateSize(), 120);
+      if (tab === 'rider') setTimeout(() => map.resize(), 120);
+      if (tab === 'driver') loadDriverDashboard();
       if (tab === 'admin') loadAdminDrivers();
     }
 
     applyUserSession();
     renderServices();
     renderAdmin();
-    fetchRealRoadRoute();
   </script>
 </body>
 </html>
